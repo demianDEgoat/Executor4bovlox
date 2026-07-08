@@ -2,7 +2,7 @@
 #import <UIKit/UIKit.h>
 
 // 1. UPDATE THIS: The URL of your control web page once you enable GitHub Pages!
-#define CONTROL_PAGE_URL @"https://yourusername.github.io/your-repository-name/index.html"
+#define CONTROL_PAGE_URL @"https://demiandegoat.github.io/Executor4bovlox/index.html"
 
 // Helper to retrieve or generate a unique persistent UUID for this device
 NSString *getDeviceUUID() {
