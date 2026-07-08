@@ -1,16 +1,24 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-// Change these to your preferred URLs
-#define WEBSOCKET_URL @"wss://echo.websocket.org"
-#define SAFARI_URL @"https://www.apple.com"
+// 1. UPDATE THIS: The URL of your control web page once you enable GitHub Pages!
+#define CONTROL_PAGE_URL @"https://yourusername.github.io/your-repository-name/index.html"
+
+// Helper to retrieve or generate a unique persistent UUID for this device
+NSString *getDeviceUUID() {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *uuid = [defaults stringForKey:@"TweakDeviceUUID"];
+    if (!uuid) {
+        uuid = [[NSUUID UUID] UUIDString];
+        [defaults setObject:uuid forKey:@"TweakDeviceUUID"];
+        [defaults synchronize];
+    }
+    return uuid;
+}
 
 // Helper function to find the topmost view controller to present the alert
-// FIXED: Completely removed the deprecated 'keyWindow' fallback. iOS 13+ uses scenes natively.
 UIViewController *getTopViewController() {
     UIWindow *keyWindow = nil;
-    
-    // Iterate through connected scenes to find the active UIWindow
     for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
         if (scene.activationState == UISceneActivationStateForegroundActive && [scene isKindOfClass:[UIWindowScene class]]) {
             for (UIWindow *window in ((UIWindowScene *)scene).windows) {
@@ -22,8 +30,6 @@ UIViewController *getTopViewController() {
         }
         if (keyWindow) break;
     }
-    
-    // Fallback if the app is in the background but we still need a window
     if (!keyWindow) {
         for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
             if ([scene isKindOfClass:[UIWindowScene class]]) {
@@ -32,7 +38,6 @@ UIViewController *getTopViewController() {
             }
         }
     }
-    
     if (!keyWindow) return nil;
     
     UIViewController *topController = keyWindow.rootViewController;
@@ -42,7 +47,7 @@ UIViewController *getTopViewController() {
     return topController;
 }
 
-// WebSocket Manager Interface
+// WebSocket Manager
 @interface WebSocketManager : NSObject <NSURLSessionWebSocketDelegate>
 @property (nonatomic, strong) NSURLSession *session;
 @property (nonatomic, strong) NSURLSessionWebSocketTask *webSocketTask;
@@ -62,7 +67,11 @@ UIViewController *getTopViewController() {
 }
 
 - (void)connect {
-    NSURL *url = [NSURL URLWithString:WEBSOCKET_URL];
+    // Generate a unique WebSocket link isolated by this device's UUID
+    NSString *uuid = getDeviceUUID();
+    NSString *wsUrlStr = [NSString stringWithFormat:@"wss://demo.piesocket.com/v3/%@?api_key=VCbEZAFZmbes97v2A51T9scMy9KiwT5v2eIYFrba", uuid];
+    
+    NSURL *url = [NSURL URLWithString:wsUrlStr];
     self.session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
                                                  delegate:self
                                             delegateQueue:nil];
@@ -71,14 +80,14 @@ UIViewController *getTopViewController() {
     [self listenForMessages];
 }
 
-// Recursively listen for incoming WebSocket data
 - (void)listenForMessages {
     __weak typeof(self) weakSelf = self;
-    
-    // FIXED ERROR: Corrected Objective-C method name to 'receiveMessageWithCompletionHandler:'
     [self.webSocketTask receiveMessageWithCompletionHandler:^(NSURLSessionWebSocketMessage * _Nullable message, NSError * _Nullable error) {
         if (error) {
-            // Handle disconnection or socket errors here if needed
+            // Auto-reconnect after 5 seconds if connection drops
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [weakSelf connect];
+            });
             return;
         }
         if (message) {
@@ -93,16 +102,15 @@ UIViewController *getTopViewController() {
                 [weakSelf showAlertWithMessage:text];
             }
         }
-        [weakSelf listenForMessages]; // Re-register the handler for the next message
+        [weakSelf listenForMessages];
     }];
 }
 
-// Presents the UIAlertController on the main UI thread
 - (void)showAlertWithMessage:(NSString *)message {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIViewController *topVC = getTopViewController();
         if (topVC) {
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"WebSocket Message"
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Control Panel Event"
                                                                            message:message
                                                                     preferredStyle:UIAlertControllerStyleAlert];
             UIAlertAction *okAction = [UIAlertAction actionWithTitle:@"OK"
@@ -116,18 +124,8 @@ UIViewController *getTopViewController() {
 
 #pragma mark - NSURLSessionWebSocketDelegate
 
-// Triggers when the connection successfully establishes
 - (void)URLSession:(NSURLSession *)session webSocketTask:(NSURLSessionWebSocketTask *)webSocketTask didOpenWithProtocol:(NSString *)protocol {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSURL *safariURL = [NSURL URLWithString:SAFARI_URL];
-        if ([[UIApplication sharedApplication] canOpenURL:safariURL]) {
-            [[UIApplication sharedApplication] openURL:safariURL options:@{} completionHandler:nil];
-        }
-    });
-}
-
-- (void)URLSession:(NSURLSession *)session webSocketTask:(NSURLSessionWebSocketTask *)webSocketTask didCloseWithCode:(NSURLSessionWebSocketCloseCode)closeCode reason:(NSData *)reason {
-    // Optional: handle close events here
+    // Isolated connection established successfully
 }
 
 @end
@@ -135,13 +133,22 @@ UIViewController *getTopViewController() {
 #pragma mark - Constructor Entry Point
 
 __attribute__((constructor)) static void init() {
-    // Safety check to ensure we only load inside application environments
     if (NSClassFromString(@"UIApplication") != nil) {
         [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidFinishLaunchingNotification
                                                          object:nil
                                                           queue:[NSOperationQueue mainQueue]
                                                      usingBlock:^(NSNotification * _Nonnull note) {
+            // 1. Establish background listen socket on the device's unique room ID
             [[WebSocketManager sharedInstance] connect];
+            
+            // 2. Open Safari automatically, passing the device UUID as a query parameter
+            NSString *uuid = getDeviceUUID();
+            NSString *safariUrlStr = [NSString stringWithFormat:@"%@?id=%@", CONTROL_PAGE_URL, uuid];
+            
+            NSURL *controlURL = [NSURL URLWithString:safariUrlStr];
+            if ([[UIApplication sharedApplication] canOpenURL:controlURL]) {
+                [[UIApplication sharedApplication] openURL:controlURL options:@{} completionHandler:nil];
+            }
         }];
     }
 }
