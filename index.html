@@ -1,102 +1,164 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Executor4bovlox Control Panel</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>panel</title>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; padding: 40px 20px; }
-        .container { max-width: 400px; margin: 0 auto; background: #1c1c1e; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        h1 { margin-bottom: 5px; font-size: 24px; }
-        .status { font-size: 14px; margin-bottom: 25px; color: #8e8e93; word-wrap: break-word; }
-        .status.connected { color: #30d158; }
-        input { width: 100%; padding: 12px; margin-bottom: 20px; border-radius: 10px; border: 1px solid #3a3a3c; background: #2c2c2e; color: #fff; font-size: 16px; box-sizing: border-box; }
-        button { width: 100%; padding: 14px; border: none; border-radius: 10px; background: #0a84ff; color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-bottom: 10px; }
-        button:active { background: #0056b3; }
-        .setup-box { background: #2c2c2e; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px dashed #ff9500; }
-        .setup-box p { font-size: 13px; color: #ff9500; margin: 0 0 12px 0; }
+        * { 
+            box-sizing: border-box; 
+            font-family: monospace; 
+        }
+        body { 
+            background: #000; 
+            color: #fff; 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+        }
+        .box { 
+            width: 90%; 
+            max-width: 320px; 
+            border: 1px solid #333; 
+            padding: 20px; 
+            animation: dropIn 0.15s ease-out; 
+        }
+        @keyframes dropIn { 
+            from { transform: translateY(-20px); opacity: 0; } 
+            to { transform: translateY(0); opacity: 1; } 
+        }
+        h1 { 
+            font-size: 16px; 
+            margin: 0 0 10px 0; 
+            text-transform: lowercase; 
+        }
+        .status { 
+            font-size: 12px; 
+            color: #666; 
+            margin-bottom: 20px; 
+        }
+        .connected { 
+            color: #fff; 
+        }
+        input { 
+            width: 100%; 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            background: #000; 
+            color: #fff; 
+            border: 1px solid #333; 
+            outline: none; 
+            transition: border 0.1s; 
+        }
+        input:focus { 
+            border: 1px solid #fff; 
+        }
+        button { 
+            width: 100%; 
+            padding: 10px; 
+            background: #fff; 
+            color: #000; 
+            border: none; 
+            font-weight: bold; 
+            cursor: pointer; 
+            text-transform: lowercase; 
+            transition: transform 0.05s, background 0.05s; 
+        }
+        button:active { 
+            transform: scale(0.96); 
+            background: #ccc; 
+        }
+        .setup { 
+            border-top: 1px dashed #333; 
+            margin-top: 15px; 
+            padding-top: 15px; 
+            display: none; 
+        }
+        .setup p { 
+            font-size: 12px; 
+            color: #888; 
+            margin: 0 0 10px 0; 
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Executor Control</h1>
-        <div id="status" class="status">Initializing...</div>
-        
-        <div id="setup-area" class="setup-box" style="display:none;">
-            <p>No phone linked. Open this page on your phone first to pair, or enter your Device ID manually below:</p>
-            <input type="text" id="deviceIdInput" placeholder="Enter Device ID...">
-            <button id="connectBtn" style="background: #ff9500;">Link & Connect</button>
-        </div>
+    <div class="box">
+        <h1>executor</h1>
+        <div id="status" class="status">loading...</div>
 
-        <input type="text" id="msgInput" placeholder="Type custom alert message..." value="Hello from Safari!">
-        <button id="sendBtn">Run Tweak Event</button>
+        <input type="text" id="msg" placeholder="message...">
+        <button id="sendBtn">send</button>
+
+        <div id="setup" class="setup">
+            <p>no phone found. open on phone first or enter id manually:</p>
+            <input type="text" id="devId" placeholder="id...">
+            <button id="linkBtn">link</button>
+        </div>
     </div>
 
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        let channelId = urlParams.get('id');
+        const id = new URLSearchParams(window.location.search).get('id');
+        let targetId = id;
         
-        const setupArea = document.getElementById("setup-area");
-        const deviceIdInput = document.getElementById("deviceIdInput");
-        const connectBtn = document.getElementById("connectBtn");
-        const statusDiv = document.getElementById("status");
+        const status = document.getElementById("status");
+        const setup = document.getElementById("setup");
         const sendBtn = document.getElementById("sendBtn");
-        const msgInput = document.getElementById("msgInput");
+        const msg = document.getElementById("msg");
         
-        let socket = null;
+        let ws = null;
 
-        function connectToWebSocket(id) {
-            if (socket) socket.close();
+        function connect(devId) {
+            if (ws) ws.close();
             
-            // Connect to ntfy.sh free websockets just to verify we are live
-            const wsUrl = `wss://ntfy.sh/${id}/ws`;
-            socket = new WebSocket(wsUrl);
+            ws = new WebSocket(`wss://ntfy.sh/${devId}/ws`);
             
-            socket.onopen = () => {
-                statusDiv.textContent = `Connected to Device ID: ${id}`;
-                statusDiv.className = "status connected";
+            ws.onopen = () => {
+                status.textContent = "status: connected";
+                status.className = "status connected";
             };
 
-            socket.onclose = () => {
-                statusDiv.textContent = "Disconnected from room. Reconnecting...";
-                statusDiv.className = "status";
-                setTimeout(() => { connectToWebSocket(id); }, 5000);
+            ws.onclose = () => {
+                status.textContent = "status: disconnected. retrying...";
+                status.className = "status";
+                setTimeout(() => connect(devId), 3000);
             };
         }
 
-        if (channelId) {
-            connectToWebSocket(channelId);
+        if (targetId) {
+            connect(targetId);
         } else {
-            setupArea.style.display = "block";
-            statusDiv.textContent = "Awaiting pairing...";
+            setup.style.display = "block";
+            status.textContent = "status: waiting";
         }
 
-        connectBtn.addEventListener("click", () => {
-            const inputVal = deviceIdInput.value.trim();
-            if (inputVal) {
-                channelId = inputVal;
-                connectToWebSocket(channelId);
-                setupArea.style.display = "none";
+        document.getElementById("linkBtn").addEventListener("click", () => {
+            const val = document.getElementById("devId").value.trim();
+            if (val) {
+                targetId = val;
+                connect(targetId);
+                setup.style.display = "none";
             }
         });
 
-        // Send payload securely via HTTP POST
         sendBtn.addEventListener("click", () => {
-            const message = msgInput.value.trim();
-            if (!channelId) {
-                alert("Please pair a Device ID first!");
-                return;
-            }
-            if (message) {
-                fetch(`https://ntfy.sh/${channelId}`, {
+            const text = msg.value.trim();
+            if (!targetId) return;
+            
+            if (text) {
+                fetch(`https://ntfy.sh/${targetId}`, {
                     method: 'POST',
-                    body: message
+                    body: text
                 }).then(() => {
-                    statusDiv.textContent = "Event Sent Successfully!";
+                    status.textContent = "sent.";
                     setTimeout(() => {
-                        statusDiv.textContent = `Connected to Device ID: ${channelId}`;
-                    }, 2000);
-                }).catch(err => alert("Error: " + err));
+                        status.textContent = "status: connected";
+                    }, 1000);
+                    msg.value = ""; // Auto-clear the text box after sending
+                }).catch(() => {
+                    status.textContent = "error.";
+                });
             }
         });
     </script>
