@@ -3,9 +3,7 @@ name: Build iOS Tweak
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch: # Allows you to manually click "Run workflow" in GitHub Actions
+  workflow_dispatch: # Allows you to manually trigger the build
 
 jobs:
   build:
@@ -15,11 +13,18 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Select Xcode Path
+      run: |
+        # Forces the runner to use the full Xcode path containing the iOS SDK
+        sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        xcrun --sdk iphoneos --show-sdk-path
+
     - name: Compile Tweak dylib
       run: |
-        xcrun -sdk iphoneos clang -dynamiclib -arch arm64 -miphoneos-version-min=13.0 -framework Foundation -framework UIKit -o WebSocketTweak.dylib Tweak.m
+        # Added -fobjc-arc to ensure modern memory management compiles without errors
+        xcrun -sdk iphoneos clang -dynamiclib -arch arm64 -miphoneos-version-min=13.0 -fobjc-arc -framework Foundation -framework UIKit -o WebSocketTweak.dylib Tweak.m
 
-    - name: Upload Compiled dylib as Artifact
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: WebSocketTweak-dylib
