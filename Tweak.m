@@ -6,24 +6,34 @@
 #define SAFARI_URL @"https://www.apple.com"
 
 // Helper function to find the topmost view controller to present the alert
+// FIXED: Completely removed the deprecated 'keyWindow' fallback. iOS 13+ uses scenes natively.
 UIViewController *getTopViewController() {
-    __block UIWindow *keyWindow = nil;
-    if (@available(iOS 13.0, *)) {
-        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-            if (scene.activationState == UISceneActivationStateForegroundActive && [scene isKindOfClass:[UIWindowScene class]]) {
-                for (UIWindow *window in ((UIWindowScene *)scene).windows) {
-                    if (window.isKeyWindow) {
-                        keyWindow = window;
-                        break;
-                    }
+    UIWindow *keyWindow = nil;
+    
+    // Iterate through connected scenes to find the active UIWindow
+    for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+        if (scene.activationState == UISceneActivationStateForegroundActive && [scene isKindOfClass:[UIWindowScene class]]) {
+            for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+                if (window.isKeyWindow) {
+                    keyWindow = window;
+                    break;
                 }
             }
-            if (keyWindow) break;
+        }
+        if (keyWindow) break;
+    }
+    
+    // Fallback if the app is in the background but we still need a window
+    if (!keyWindow) {
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                keyWindow = ((UIWindowScene *)scene).windows.firstObject;
+                if (keyWindow) break;
+            }
         }
     }
-    if (!keyWindow) {
-        keyWindow = [UIApplication sharedApplication].keyWindow;
-    }
+    
+    if (!keyWindow) return nil;
     
     UIViewController *topController = keyWindow.rootViewController;
     while (topController.presentedViewController) {
@@ -64,7 +74,9 @@ UIViewController *getTopViewController() {
 // Recursively listen for incoming WebSocket data
 - (void)listenForMessages {
     __weak typeof(self) weakSelf = self;
-    [self.webSocketTask receiveWithCompletionHandler:^(NSURLSessionWebSocketMessage * _Nullable message, NSError * _Nullable error) {
+    
+    // FIXED ERROR: Corrected Objective-C method name to 'receiveMessageWithCompletionHandler:'
+    [self.webSocketTask receiveMessageWithCompletionHandler:^(NSURLSessionWebSocketMessage * _Nullable message, NSError * _Nullable error) {
         if (error) {
             // Handle disconnection or socket errors here if needed
             return;
