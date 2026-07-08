@@ -1,0 +1,26 @@
+name: Build iOS Tweak
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows you to manually click "Run workflow" in GitHub Actions
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Compile Tweak dylib
+      run: |
+        xcrun -sdk iphoneos clang -dynamiclib -arch arm64 -miphoneos-version-min=13.0 -framework Foundation -framework UIKit -o WebSocketTweak.dylib Tweak.m
+
+    - name: Upload Compiled dylib as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: WebSocketTweak-dylib
+        path: WebSocketTweak.dylib
