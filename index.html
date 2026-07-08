@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>iOS Tweak Control Panel</title>
+    <title>Executor4bovlox Control Panel</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: -apple-system, sans-serif; background: #000; color: #fff; text-align: center; padding: 40px 20px; }
@@ -19,10 +19,9 @@
 </head>
 <body>
     <div class="container">
-        <h1>Tweak Controller</h1>
+        <h1>Executor Control</h1>
         <div id="status" class="status">Initializing...</div>
         
-        <!-- Shown only if the page is opened without a device ID in the URL -->
         <div id="setup-area" class="setup-box" style="display:none;">
             <p>No phone linked. Open this page on your phone first to pair, or enter your Device ID manually below:</p>
             <input type="text" id="deviceIdInput" placeholder="Enter Device ID...">
@@ -34,7 +33,6 @@
     </div>
 
     <script>
-        // Extract the unique device ID from the URL search query (e.g. ?id=UUID)
         const urlParams = new URLSearchParams(window.location.search);
         let channelId = urlParams.get('id');
         
@@ -48,11 +46,10 @@
         let socket = null;
 
         function connectToWebSocket(id) {
-            if (socket) {
-                socket.close();
-            }
-            // Uses the device UUID as a completely isolated room
-            const wsUrl = `wss://demo.piesocket.com/v3/${id}?api_key=VCbEZAFZmbes97v2A51T9scMy9KiwT5v2eIYFrba`;
+            if (socket) socket.close();
+            
+            // Connect to ntfy.sh free websockets just to verify we are live
+            const wsUrl = `wss://ntfy.sh/${id}/ws`;
             socket = new WebSocket(wsUrl);
             
             socket.onopen = () => {
@@ -61,12 +58,12 @@
             };
 
             socket.onclose = () => {
-                statusDiv.textContent = "Disconnected from room.";
+                statusDiv.textContent = "Disconnected from room. Reconnecting...";
                 statusDiv.className = "status";
+                setTimeout(() => { connectToWebSocket(id); }, 5000);
             };
         }
 
-        // Auto-connect if URL has the 'id' parameter from the tweak launch
         if (channelId) {
             connectToWebSocket(channelId);
         } else {
@@ -74,7 +71,6 @@
             statusDiv.textContent = "Awaiting pairing...";
         }
 
-        // Fallback for manual computer web pairing
         connectBtn.addEventListener("click", () => {
             const inputVal = deviceIdInput.value.trim();
             if (inputVal) {
@@ -84,18 +80,23 @@
             }
         });
 
+        // Send payload securely via HTTP POST
         sendBtn.addEventListener("click", () => {
             const message = msgInput.value.trim();
             if (!channelId) {
                 alert("Please pair a Device ID first!");
                 return;
             }
-            if (message && socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(message);
-                statusDiv.textContent = "Event Sent!";
-                setTimeout(() => {
-                    statusDiv.textContent = `Connected to Device ID: ${channelId}`;
-                }, 2000);
+            if (message) {
+                fetch(`https://ntfy.sh/${channelId}`, {
+                    method: 'POST',
+                    body: message
+                }).then(() => {
+                    statusDiv.textContent = "Event Sent Successfully!";
+                    setTimeout(() => {
+                        statusDiv.textContent = `Connected to Device ID: ${channelId}`;
+                    }, 2000);
+                }).catch(err => alert("Error: " + err));
             }
         });
     </script>
